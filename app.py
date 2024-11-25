@@ -5,25 +5,12 @@ from sklearn.metrics.pairwise import linear_kernel
 
 app = Flask(__name__)
 
-# Sample dataset of project ideas
-projects = pd.DataFrame({
-    'id': [1, 2, 3, 4, 5],
-    'title': [
-        'AI Chatbot for Customer Service',
-        'IoT-based Smart Home System',
-        'Blockchain for Secure Voting',
-        'E-commerce Recommendation System',
-        'Healthcare Prediction with Machine Learning',
-    ],
-    'description': [
-        'Build a chatbot using NLP techniques for automating customer interactions.',
-        'Design a smart home system using IoT devices like sensors and actuators.',
-        'Implement a secure voting system using blockchain technology.',
-        'Create a recommendation system for e-commerce platforms using user data.',
-        'Predict health conditions using machine learning and patient data.'
-    ],
-    'tags': ['AI', 'IoT', 'Blockchain', 'AI', 'Healthcare']
-})
+# Function to load projects from an Excel file
+def load_projects(file_path):
+    return pd.read_excel(file_path)
+
+# Load project ideas from an Excel file
+projects = load_projects("project_ideas.xlsx")  # Replace with your file name
 
 # TF-IDF Vectorizer for content-based filtering
 tfidf = TfidfVectorizer(stop_words='english')
@@ -47,6 +34,13 @@ def recommend():
     recommendations = recommend_projects(user_input)
     return jsonify(recommendations)
 
+# Route to reload the Excel file dynamically (Optional)
+@app.route('/reload', methods=['POST'])
+def reload_projects():
+    global projects, tfidf_matrix
+    projects = load_projects("project_ideas.xlsx")  # Reload the Excel file
+    tfidf_matrix = tfidf.fit_transform(projects['description'])
+    return "Projects reloaded successfully!"
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
