@@ -4,10 +4,16 @@ from transformers import LlamaTokenizer, LlamaForCausalLM
 
 app = Flask(__name__)
 
-# Load the LLaMA model and tokenizer
+# Load Hugging Face Token from environment variables
+hf_token = os.environ.get("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")
+
+if not hf_token:
+    raise ValueError("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")
+
+# Load the LLaMA model and tokenizer with the token
 print("Loading LLaMA model and tokenizer...")
-tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
-model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
+tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf", use_auth_token=hf_token)
+model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf", use_auth_token=hf_token)
 print("Model loaded successfully!")
 
 # Function to generate recommendations
