@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from transformers import LlamaTokenizer, LlamaForCausalLM
 
@@ -11,17 +12,14 @@ print("Model loaded successfully!")
 
 # Function to generate recommendations
 def recommend_projects(input_tags, num_recommendations=3):
-    # Tokenize and generate text
     inputs = tokenizer(input_tags, return_tensors="pt")
     outputs = model.generate(inputs["input_ids"], max_length=200, num_return_sequences=num_recommendations)
-    
     recommendations = []
     for i, output in enumerate(outputs):
         decoded_text = tokenizer.decode(output, skip_special_tokens=True)
         recommendations.append({"title": f"Project {i+1}", "description": decoded_text.strip()})
     return recommendations
 
-# Route to handle project recommendations
 @app.route('/recommend', methods=['POST'])
 def recommend():
     user_input = request.form.get('tags', '')
@@ -31,10 +29,10 @@ def recommend():
     recommendations = recommend_projects(user_input)
     return jsonify(recommendations)
 
-# Home route for testing
 @app.route('/')
 def home():
     return "Welcome to the Project Recommender!"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))  # Render uses the "PORT" environment variable
+    app.run(host='0.0.0.0', port=port)
