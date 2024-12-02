@@ -3,4 +3,4 @@ pandas
 scikit-learn
 gunicorn
 openpyxl
-openai
+openai>=1.0.0
