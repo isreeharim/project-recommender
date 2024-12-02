@@ -1,46 +1,44 @@
 from flask import Flask, request, jsonify, render_template
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+import openai
 
 app = Flask(__name__)
 
-# Function to load projects from an Excel file
-def load_projects(file_path):
+# Configure your OpenAI API key
+openai.api_key = "sk-ijklmnopqrstuvwxijklmnopqrstuvwxijklmnop"  # Replace with your actual OpenAI API key
+
+# Function to get recommendations from ChatGPT
+def get_chatgpt_recommendations(tags, num_recommendations=3):
     try:
-        return pd.read_excel(file_path)
-    except FileNotFoundError:
-        print(f"Error: The file {file_path} was not found.")
-        return pd.DataFrame(columns=['id', 'title', 'description'])
-    except Exception as e:
-        print(f"Error loading file: {e}")
-        return pd.DataFrame(columns=['id', 'title', 'description'])
-
-# Load project ideas from an Excel file
-projects = load_projects("project_ideas.xlsx")  # Replace with your file name
-
-# Check if the file is loaded successfully
-if projects.empty:
-    print("No projects loaded. Please check the Excel file.")
-else:
-    # TF-IDF Vectorizer for content-based filtering
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(projects['description'])
-
-# Recommendation function
-def recommend_projects(input_tags, num_recommendations=3):
-    try:
-        if projects.empty:
-            return [{"error": "No projects available for recommendations."}]
+        # Construct a prompt for ChatGPT
+        prompt = (
+            f"Generate {num_recommendations} innovative project ideas based on the following tags: {tags}. "
+            "Each idea should have a title and a brief description."
+        )
         
-        input_vector = tfidf.transform([input_tags])
-        cosine_similarities = linear_kernel(input_vector, tfidf_matrix).flatten()
-        related_indices = cosine_similarities.argsort()[-num_recommendations:][::-1]
-        recommendations = projects.iloc[related_indices]
-        return recommendations[['id', 'title', 'description']].to_dict(orient='records')
+        # Call the OpenAI API
+        response = openai.Completion.create(
+            engine="text-davinci-003",  # Or use "gpt-4" if available
+            prompt=prompt,
+            max_tokens=500,
+            n=1,
+            stop=None,
+            temperature=0.7,
+        )
+        
+        # Parse the response text
+        output = response.choices[0].text.strip().split("\n\n")  # Split ideas
+        recommendations = []
+        for idea in output:
+            if ": " in idea:
+                title, description = idea.split(": ", 1)
+                recommendations.append({"title": title.strip(), "description": description.strip()})
+            else:
+                recommendations.append({"title": idea.strip(), "description": ""})
+        
+        return recommendations
     except Exception as e:
-        print(f"Error during recommendation: {e}")
-        return [{"error": "An error occurred during recommendation."}]
+        print(f"Error fetching ChatGPT recommendations: {e}")
+        return [{"error": "Failed to generate recommendations. Please try again later."}]
 
 @app.route('/')
 def home():
@@ -51,22 +49,9 @@ def recommend():
     user_input = request.form.get('tags', '').strip()
     if not user_input:
         return jsonify([{"error": "No tags provided. Please enter some tags."}])
-    recommendations = recommend_projects(user_input)
+    
+    recommendations = get_chatgpt_recommendations(user_input)
     return jsonify(recommendations)
-
-# Route to reload the Excel file dynamically (Optional)
-@app.route('/reload', methods=['POST'])
-def reload_projects():
-    global projects, tfidf_matrix
-    try:
-        projects = load_projects("project_ideas.xlsx")  # Reload the Excel file
-        if projects.empty:
-            return "No projects found. Please check the Excel file."
-        tfidf_matrix = tfidf.fit_transform(projects['description'])
-        return "Projects reloaded successfully!"
-    except Exception as e:
-        print(f"Error reloading projects: {e}")
-        return f"Error reloading projects: {e}"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
