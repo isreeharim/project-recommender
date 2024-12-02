@@ -1,57 +1,40 @@
-from flask import Flask, request, jsonify, render_template
-import openai
+from flask import Flask, request, jsonify
+from transformers import LlamaTokenizer, LlamaForCausalLM
 
 app = Flask(__name__)
 
-# Configure your OpenAI API key
-openai.api_key = "sk-ijklmnopqrstuvwxijklmnopqrstuvwxijklmnop"  # Replace with your actual OpenAI API key
+# Load the LLaMA model and tokenizer
+print("Loading LLaMA model and tokenizer...")
+tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
+print("Model loaded successfully!")
 
-# Function to get recommendations from ChatGPT
-def get_chatgpt_recommendations(tags, num_recommendations=3):
-    try:
-        # Construct a prompt for ChatGPT
-        prompt = (
-            f"Generate {num_recommendations} innovative project ideas based on the following tags: {tags}. "
-            "Each idea should have a title and a brief description."
-        )
-        
-        # Call the OpenAI API
-        response = openai.Completion.create(
-            engine="text-davinci-003",  # Or use "gpt-4" if available
-            prompt=prompt,
-            max_tokens=500,
-            n=1,
-            stop=None,
-            temperature=0.7,
-        )
-        
-        # Parse the response text
-        output = response.choices[0].text.strip().split("\n\n")  # Split ideas
-        recommendations = []
-        for idea in output:
-            if ": " in idea:
-                title, description = idea.split(": ", 1)
-                recommendations.append({"title": title.strip(), "description": description.strip()})
-            else:
-                recommendations.append({"title": idea.strip(), "description": ""})
-        
-        return recommendations
-    except Exception as e:
-        print(f"Error fetching ChatGPT recommendations: {e}")
-        return [{"error": "Failed to generate recommendations. Please try again later."}]
+# Function to generate recommendations
+def recommend_projects(input_tags, num_recommendations=3):
+    # Tokenize and generate text
+    inputs = tokenizer(input_tags, return_tensors="pt")
+    outputs = model.generate(inputs["input_ids"], max_length=200, num_return_sequences=num_recommendations)
+    
+    recommendations = []
+    for i, output in enumerate(outputs):
+        decoded_text = tokenizer.decode(output, skip_special_tokens=True)
+        recommendations.append({"title": f"Project {i+1}", "description": decoded_text.strip()})
+    return recommendations
 
-@app.route('/')
-def home():
-    return render_template('index.html')  # Ensure this file exists in the `templates` folder
-
+# Route to handle project recommendations
 @app.route('/recommend', methods=['POST'])
 def recommend():
-    user_input = request.form.get('tags', '').strip()
+    user_input = request.form.get('tags', '')
     if not user_input:
-        return jsonify([{"error": "No tags provided. Please enter some tags."}])
+        return jsonify({"error": "No input tags provided"}), 400
     
-    recommendations = get_chatgpt_recommendations(user_input)
+    recommendations = recommend_projects(user_input)
     return jsonify(recommendations)
+
+# Home route for testing
+@app.route('/')
+def home():
+    return "Welcome to the Project Recommender!"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
