@@ -8,7 +8,7 @@ app = Flask(__name__)
 hf_token = os.environ.get("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")
 
 if not hf_token:
-    raise ValueError("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")
+    raise ValueError("Hugging Face token (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) not found in environment variables.")
 
 # Load the LLaMA model and tokenizer with the token
 print("Loading LLaMA model and tokenizer...")
