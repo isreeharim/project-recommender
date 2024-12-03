@@ -1,12 +1,33 @@
-from flask import Flask, request, render_template
-import requests
-import json
+from flask import Flask, request, jsonify, render_template
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+import os
 
 app = Flask(__name__)
 
-# Google Gemini API Endpoint and Key
-API_KEY = "AIzaSyCQSNlgod8yCyBfFMNf40WovBNMaBBmfpY"
-API_URL = "https://gemini.googleapis.com/v1/models/text:generate"  # Replace with the actual API endpoint if different
+# Function to load projects from the Excel file
+def load_projects(file_path):
+    try:
+        return pd.read_excel(file_path)
+    except FileNotFoundError:
+        raise Exception(f"Excel file '{file_path}' not found. Please ensure it exists.")
+
+# Load project ideas from an Excel file
+EXCEL_FILE = "project_ideas.xlsx"  # Replace with your actual file name
+projects = load_projects(EXCEL_FILE)
+
+# TF-IDF Vectorizer for content-based filtering
+tfidf = TfidfVectorizer(stop_words="english")
+tfidf_matrix = tfidf.fit_transform(projects["description"])
+
+# Recommendation function
+def recommend_projects(input_tags, num_recommendations=3):
+    input_vector = tfidf.transform([input_tags])
+    cosine_similarities = linear_kernel(input_vector, tfidf_matrix).flatten()
+    related_indices = cosine_similarities.argsort()[-num_recommendations:][::-1]
+    recommendations = projects.iloc[related_indices]
+    return recommendations[["id", "title", "description"]].to_dict(orient="records")
 
 @app.route("/")
 def home():
@@ -14,30 +35,21 @@ def home():
 
 @app.route("/recommend", methods=["POST"])
 def recommend():
-    user_input = request.form.get("query")
+    user_input = request.form.get("tags")
+    recommendations = recommend_projects(user_input)
+    return jsonify(recommendations)
 
-    # Google Gemini API call setup
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    # Define the payload for the API call to Google Gemini (or PaLM)
-    payload = {
-        "prompt": f"Suggest project ideas based on the following interests: {user_input}",
-        "max_tokens": 200,
-        "temperature": 0.7
-    }
-
-    # Send POST request to Google Gemini API
-    response = requests.post(API_URL, headers=headers, json=payload)
-
-    if response.status_code == 200:
-        recommendations = response.json().get("choices", [{}])[0].get("text", "").split("\n")
-    else:
-        recommendations = ["Error: Could not fetch recommendations from Google Gemini."]
-    
-    return render_template("index.html", recommendations=recommendations)
+@app.route("/reload", methods=["POST"])
+def reload_projects():
+    global projects, tfidf_matrix
+    try:
+        projects = load_projects(EXCEL_FILE)
+        tfidf_matrix = tfidf.fit_transform(projects["description"])
+        return "Projects reloaded successfully!"
+    except Exception as e:
+        return str(e), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use port 5000 by default or set the PORT environment variable for Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
